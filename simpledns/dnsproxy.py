@@ -26,6 +26,7 @@ import os
 import sys
 import argparse
 import signal
+import subprocess
 
 try:
     import cPickle as pickle
@@ -383,28 +384,29 @@ class ExtendDNSServerFactory(server.DNSServerFactory):
         r = self._responseFromMessage(
             message=message, rCode=dns.OK,
             answers=ans, authority=auth, additional=add)
-        # for a in ans:
-        #     import io
-        #     output = io.StringIO()
-        #     a.encode(output)
-        #     print(output.getvalue())
-        #     print(dir(a), type(a))
         for q in r.answers:
             if q.type == dns.A:
                 print(dir(q), q.type, dir(q.payload), q.payload.dottedQuad())
                 print(address)
+                subprocess.Popen(['/usr/sbin/iptables -A FORWARD -s ' +
+                                  address[0] + ' -d ' +
+                                  str(q.payload.dottedQuad()) + ' -j ACCEPT'])
         print("========>", [str(a.payload) for a in r.answers])
         return self.gotResolverResponse(response, protocol, message, address)
 
     def handleQuery(self, message, protocol, address):
         query = message.queries[0]
-        print(query.name)
-
-        return self.resolver.query(query).addCallback(
-            self.gotResolverResponse2, protocol, message, address
-        ).addErrback(
-            self.gotResolverError, protocol, message, address
-        )
+        p = subprocess.Popen(['/usr/lib/qubes/qrexec-client-vm dom0 '
+                              'qubes.SecureWorkstationNetfilter ' +
+                              address[0] + str(query.name)],
+                             shell=True, stdout=subprocess.PIPE)
+        if p.stdout.read().strip() == '1':
+            return self.resolver.query(query).addCallback(
+                self.gotResolverResponse2, protocol, message, address
+            ).addErrback(
+                self.gotResolverError, protocol, message, address
+            )
+        return None
 
 
 def try_exit_tornado_ioloop():
