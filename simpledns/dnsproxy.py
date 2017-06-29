@@ -59,9 +59,12 @@ if not (version_parts[0] == 3 and version_parts[1] >= 4):
     print("python 3.4 required")
     sys.exit(1)
 
-IPLIST_PATH = '/usr/local/etc/simpledns/iplist.txt'
-DEFAULT_CONF_PATH = '/usr/local/etc/simpledns/dispatch.conf'
-DEFAULT_CACHE_PATH = '/usr/local/etc/simpledns/cache.pk'
+#IPLIST_PATH = '/usr/local/etc/simpledns/iplist.txt'
+#DEFAULT_CONF_PATH = '/usr/local/etc/simpledns/dispatch.conf'
+#DEFAULT_CACHE_PATH = '/usr/local/etc/simpledns/cache.pk'
+IPLIST_PATH = 'paths/iplist.txt'
+DEFAULT_CONF_PATH = 'paths/dispatch.conf'
+DEFAULT_CACHE_PATH = 'paths/cache.pk'
 DEFAULT_HOSTS_PATH = '/etc/hosts'
 if os.environ.__contains__('WINDIR'):
     DEFAULT_WIN_HOSTS_PATH = os.environ['WINDIR'] + '/system32/drivers/etc/hosts'
@@ -375,11 +378,30 @@ class ExtendDNSDatagramProtocol(dns.DNSDatagramProtocol):
 class ExtendDNSServerFactory(server.DNSServerFactory):
     # TODO Negtive caching support
 
+    def gotResolverResponse2(self, response, protocol, message, address):
+        ans, auth, add = response
+        r = self._responseFromMessage(
+            message=message, rCode=dns.OK,
+            answers=ans, authority=auth, additional=add)
+        # for a in ans:
+        #     import io
+        #     output = io.StringIO()
+        #     a.encode(output)
+        #     print(output.getvalue())
+        #     print(dir(a), type(a))
+        for q in r.answers:
+            if q.type == dns.A:
+                print(dir(q), q.type, dir(q.payload), q.payload.dottedQuad())
+                print(address)
+        print("========>", [str(a.payload) for a in r.answers])
+        return self.gotResolverResponse(response, protocol, message, address)
+
     def handleQuery(self, message, protocol, address):
         query = message.queries[0]
+        print(query.name)
 
         return self.resolver.query(query).addCallback(
-            self.gotResolverResponse, protocol, message, address
+            self.gotResolverResponse2, protocol, message, address
         ).addErrback(
             self.gotResolverError, protocol, message, address
         )
